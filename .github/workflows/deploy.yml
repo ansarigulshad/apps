@@ -28,7 +28,7 @@ jobs:
       - name: Build
         working-directory: apps/${{ matrix.app }}
         env:
-          VITE_GITHUB_CLIENT_ID: ${{ vars.GITHUB_OAUTH_CLIENT_ID }}
+          VITE_GITHUB_CLIENT_ID: ${{ vars.OAUTH_CLIENT_ID }}
           VITE_OAUTH_WORKER_URL: ${{ vars.OAUTH_WORKER_URL }}
         run: npm run build
 
