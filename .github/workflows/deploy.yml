@@ -1,0 +1,59 @@
+name: Build & deploy apps
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [birthday-bot]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+
+      - name: Install
+        working-directory: apps/${{ matrix.app }}
+        run: npm ci
+
+      - name: Build
+        working-directory: apps/${{ matrix.app }}
+        env:
+          VITE_GITHUB_CLIENT_ID: ${{ vars.GITHUB_OAUTH_CLIENT_ID }}
+          VITE_OAUTH_WORKER_URL: ${{ vars.OAUTH_WORKER_URL }}
+        run: npm run build
+
+      - name: Checkout pages repo
+        uses: actions/checkout@v4
+        with:
+          repository: ansarigulshad/ansarigulshad.github.io
+          token: ${{ secrets.PAGES_DEPLOY_TOKEN }}
+          path: pages-site
+
+      - name: Sync build output into pages repo
+        run: |
+          rm -rf "pages-site/apps/${{ matrix.app }}"
+          mkdir -p "pages-site/apps/${{ matrix.app }}"
+          cp -r "apps/${{ matrix.app }}/dist/." "pages-site/apps/${{ matrix.app }}/"
+
+      - name: Commit and push
+        working-directory: pages-site
+        run: |
+          git config user.name "apps-deploy-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add "apps/${{ matrix.app }}"
+          if git diff --cached --quiet; then
+            echo "No changes to deploy."
+          else
+            git commit -m "Deploy ${{ matrix.app }} from apps@${{ github.sha }}"
+            git push
+          fi

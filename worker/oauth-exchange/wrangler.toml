@@ -1,0 +1,11 @@
+name = "birthday-bot-oauth"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Secrets (set with `wrangler secret put <NAME>`, never committed):
+#   GITHUB_CLIENT_ID
+#   GITHUB_CLIENT_SECRET
+#   ALLOWED_ORIGIN   (e.g. https://gulshadansari.in)
+
+# After `wrangler deploy`, either use the default workers.dev URL as your
+# OAuth App's callback, or map a route like api.gulshadansari.in/oauth/*.
