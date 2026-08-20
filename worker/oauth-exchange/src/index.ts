@@ -40,33 +40,51 @@ export default {
       return new Response('Missing code', { status: 400 });
     }
 
-    const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        client_id: env.GITHUB_CLIENT_ID,
-        client_secret: env.GITHUB_CLIENT_SECRET,
-        code,
-      }),
-    });
-
-    const tokenJson = await tokenRes.json<{
-      access_token?: string;
-      error?: string;
-      error_description?: string;
-    }>();
-
-    const appUrl = new URL(APP_PATH, env.ALLOWED_ORIGIN);
-    if (tokenJson.access_token) {
-      appUrl.hash = `gh_oauth_token=${encodeURIComponent(tokenJson.access_token)}`;
-    } else {
-      const message = tokenJson.error_description ?? tokenJson.error ?? 'unknown_error';
-      appUrl.hash = `gh_oauth_error=${encodeURIComponent(message)}`;
+    let appOrigin: URL;
+    try {
+      appOrigin = new URL(env.ALLOWED_ORIGIN);
+    } catch {
+      return new Response(
+        `Misconfigured: ALLOWED_ORIGIN secret is missing or not a full URL (got ${JSON.stringify(
+          env.ALLOWED_ORIGIN
+        )}). Set it with: wrangler secret put ALLOWED_ORIGIN, value https://gulshadansari.in`,
+        { status: 500 }
+      );
     }
 
-    return Response.redirect(appUrl.toString(), 302);
+    try {
+      const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          client_id: env.GITHUB_CLIENT_ID,
+          client_secret: env.GITHUB_CLIENT_SECRET,
+          code,
+        }),
+      });
+
+      const tokenJson = await tokenRes.json<{
+        access_token?: string;
+        error?: string;
+        error_description?: string;
+      }>();
+
+      const appUrl = new URL(APP_PATH, appOrigin);
+      if (tokenJson.access_token) {
+        appUrl.hash = `gh_oauth_token=${encodeURIComponent(tokenJson.access_token)}`;
+      } else {
+        const message = tokenJson.error_description ?? tokenJson.error ?? 'unknown_error';
+        appUrl.hash = `gh_oauth_error=${encodeURIComponent(message)}`;
+      }
+
+      return Response.redirect(appUrl.toString(), 302);
+    } catch (err) {
+      return new Response(`Token exchange failed: ${err instanceof Error ? err.message : String(err)}`, {
+        status: 500,
+      });
+    }
   },
 };
