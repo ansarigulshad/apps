@@ -1,10 +1,20 @@
 import { GITHUB_CLIENT_ID, OAUTH_WORKER_URL } from './config';
 
+export const OAUTH_CHANNEL_NAME = 'gh-oauth';
+
 /**
  * Opens a GitHub OAuth popup and resolves with an access token.
+ *
  * The token exchange happens in a Worker (see /worker/oauth-exchange) since
  * it needs a client_secret that must never ship to the browser. This module
  * only ever holds the token in memory — nothing touches localStorage.
+ *
+ * Communication back from the popup uses BroadcastChannel, not
+ * window.opener.postMessage: github.com sends
+ * Cross-Origin-Opener-Policy: same-origin, which severs window.opener on the
+ * popup as soon as it loads the authorize screen. BroadcastChannel is
+ * same-origin-scoped pub/sub and doesn't depend on the opener relationship,
+ * so it survives that. See main.tsx for the popup-side relay.
  */
 export function signInWithGitHub(): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -27,22 +37,21 @@ export function signInWithGitHub(): Promise<string> {
       return;
     }
 
-    const workerOrigin = new URL(OAUTH_WORKER_URL).origin;
+    const channel = new BroadcastChannel(OAUTH_CHANNEL_NAME);
     let settled = false;
 
     const cleanup = () => {
-      window.removeEventListener('message', onMessage);
+      channel.close();
       clearInterval(pollClosed);
     };
 
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== workerOrigin) return;
+    channel.onmessage = (event: MessageEvent) => {
       const data = event.data as { type?: string; token?: string; error?: string };
-      if (data?.type === 'gh-oauth-token' && data.token) {
+      if (data?.type === 'token' && data.token) {
         settled = true;
         cleanup();
         resolve(data.token);
-      } else if (data?.type === 'gh-oauth-error') {
+      } else if (data?.type === 'error') {
         settled = true;
         cleanup();
         reject(new Error(data.error ?? 'GitHub sign-in failed.'));
@@ -55,7 +64,5 @@ export function signInWithGitHub(): Promise<string> {
         reject(new Error('Sign-in window was closed before completing.'));
       }
     }, 500);
-
-    window.addEventListener('message', onMessage);
   });
 }

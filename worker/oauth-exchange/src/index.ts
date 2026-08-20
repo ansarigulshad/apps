@@ -8,8 +8,15 @@
  *
  * Flow: browser opens a popup to github.com/login/oauth/authorize, GitHub
  * redirects the popup back here with ?code=..., this Worker exchanges it for
- * an access token and posts it to the opener window via postMessage, scoped
- * to ALLOWED_ORIGIN only.
+ * an access token and redirects the popup back to the app with the token in
+ * the URL fragment (never sent to any server). The app relays it to the main
+ * tab via BroadcastChannel.
+ *
+ * Deliberately NOT using window.opener.postMessage: github.com sends
+ * Cross-Origin-Opener-Policy: same-origin, which permanently severs
+ * window.opener on this popup the moment it loads the authorize screen —
+ * even after redirecting back here. window.opener is null by the time this
+ * code runs, so anything depending on it silently no-ops.
  */
 
 export interface Env {
@@ -17,6 +24,8 @@ export interface Env {
   GITHUB_CLIENT_SECRET: string;
   ALLOWED_ORIGIN: string; // e.g. https://gulshadansari.in
 }
+
+const APP_PATH = '/apps/birthday-bot/';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -50,21 +59,14 @@ export default {
       error_description?: string;
     }>();
 
-    const payload = tokenJson.access_token
-      ? { type: 'gh-oauth-token', token: tokenJson.access_token }
-      : { type: 'gh-oauth-error', error: tokenJson.error_description ?? tokenJson.error ?? 'unknown_error' };
+    const appUrl = new URL(APP_PATH, env.ALLOWED_ORIGIN);
+    if (tokenJson.access_token) {
+      appUrl.hash = `gh_oauth_token=${encodeURIComponent(tokenJson.access_token)}`;
+    } else {
+      const message = tokenJson.error_description ?? tokenJson.error ?? 'unknown_error';
+      appUrl.hash = `gh_oauth_error=${encodeURIComponent(message)}`;
+    }
 
-    const html = `<!doctype html>
-<html><body style="font-family: sans-serif; padding: 2rem;">
-<p>${tokenJson.access_token ? 'Signed in — you can close this window.' : 'Sign-in failed — you can close this window.'}</p>
-<script>
-  if (window.opener) {
-    window.opener.postMessage(${JSON.stringify(payload)}, ${JSON.stringify(env.ALLOWED_ORIGIN)});
-  }
-  window.close();
-</script>
-</body></html>`;
-
-    return new Response(html, { headers: { 'Content-Type': 'text/html' } });
+    return Response.redirect(appUrl.toString(), 302);
   },
 };
