@@ -72,6 +72,10 @@ export default {
         error_description?: string;
       }>();
 
+      if (!tokenJson.access_token) {
+        console.error('GitHub token exchange failed:', JSON.stringify(tokenJson));
+      }
+
       const appUrl = new URL(APP_PATH, appOrigin);
       if (tokenJson.access_token) {
         appUrl.hash = `gh_oauth_token=${encodeURIComponent(tokenJson.access_token)}`;
