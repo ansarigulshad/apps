@@ -50,7 +50,7 @@ Add it as a secret named `PAGES_DEPLOY_TOKEN` on the **`apps`** repo (Settings
 
 Settings → Secrets and variables → Actions → Variables tab:
 
-- `GITHUB_OAUTH_CLIENT_ID` — the Client ID from step 1 (not secret, just
+- `OAUTH_CLIENT_ID` — the Client ID from step 1 (not secret, just
   needs to be baked into the built JS)
 - `OAUTH_WORKER_URL` — the Worker URL from step 2, e.g.
   `https://birthday-bot-oauth.<you>.workers.dev`
